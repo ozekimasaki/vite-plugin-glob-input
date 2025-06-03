@@ -1,0 +1,51 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Testing Strategy
+
+## Test Framework Configuration
+
+### Vitest 3.2 Setup
+- Uses projects configuration instead of deprecated workspace
+- V8 coverage provider with AST-aware remapping
+- HTML, JSON, and text coverage reporters
+- Coverage exclusions for `node_modules/`, `dist/`, `**/*.d.ts`, `__tests__/`
+
+### Test Structure
+The main test file [__tests__/build.test.ts](mdc:__tests__/build.test.ts) contains integration tests that:
+
+1. **実際のViteビルドを実行** - Runs actual Vite builds with the plugin
+2. **ファイル存在確認** - Verifies expected output files are generated
+3. **設定バリエーションテスト** - Tests different plugin configuration options
+4. **エラーケース処理** - Tests error handling for edge cases
+
+### Test Cases Coverage
+
+#### Core Functionality Tests
+- `すべてのHTMLファイルをビルドできる` - Tests basic glob pattern matching
+- `パターンマッチによるファイル除外が機能する` - Tests ignore patterns and exclusions
+- `エイリアス無効化が正常に動作する` - Tests `disableAlias: true` option
+
+#### Configuration Tests  
+- `カスタムエイリアス設定が適用される` - Tests custom alias configuration
+- `マッチするファイルがない場合の処理` - Tests graceful handling of no matches
+
+### Test Environment Setup
+- Uses `beforeEach` to clean dist directory before each test
+- Uses `afterAll` to cleanup test artifacts
+- Test files located in `__tests__/src/` directory simulate real project structure
+- Includes sample HTML files with various naming patterns for comprehensive testing
+
+### Coverage Requirements
+- Minimum coverage target: 70%
+- Current coverage: 78.37% (good)
+- Focus on testing critical path and error conditions
+- Exclude configuration files and type definitions from coverage
+
+## Running Tests
+- `npm test` - Run tests once
+- `npm run coverage` - Run tests with coverage report
+- `npm run type-check` - TypeScript compilation check
+

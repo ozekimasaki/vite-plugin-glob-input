@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Project Structure Guide
+
+## Overview
+This is a Vite plugin that adds files to `build.rollupOptions.input` using fast-glob patterns. The plugin supports Vite 7 beta and uses Vitest 3.2 for testing.
+
+## Key Files
+
+### Main Plugin Code
+- [src/index.ts](mdc:src/index.ts) - Main plugin implementation with TypeScript interfaces and core logic
+- [package.json](mdc:package.json) - Package configuration, dependencies, and npm scripts
+
+### Configuration Files
+- [tsconfig.json](mdc:tsconfig.json) - TypeScript configuration with ES2022 target and bundler module resolution
+- [vitest.config.ts](mdc:vitest.config.ts) - Vitest 3.2 configuration with projects setup and V8 coverage
+- [.gitignore](mdc:.gitignore) - Git ignore rules for build outputs, coverage reports, and dependencies
+
+### Testing
+- [__tests__/build.test.ts](mdc:__tests__/build.test.ts) - Integration tests using Japanese test descriptions
+- Test files in `__tests__/src/` directory provide sample HTML files for testing
+
+### Documentation
+- [README.md](mdc:README.md) - Comprehensive documentation with usage examples and API reference
+
+## Build Output
+- `dist/` folder contains compiled JavaScript and TypeScript declaration files
+- `dist/index.js` - Main entry point for JavaScript users  
+- `dist/index.d.ts` - Type definitions for TypeScript users
+- `coverage/` folder contains HTML and JSON coverage reports (gitignored)
+
+## Development Workflow
+1. Edit source code in `src/index.ts`
+2. Run tests with `npm test` or `npm run coverage`
+3. Build with `npm run build`
+4. Type check with `npm run type-check`
+
