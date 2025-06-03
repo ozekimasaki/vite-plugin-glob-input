@@ -1,0 +1,58 @@
+{
+  "name": "vite-plugin-glob-input",
+  "version": "0.0.1",
+  "description": "Vite plugin to add files to build.rollupOptions.input using fast-glob",
+  "author": "ozekimasaki",
+  "license": "MIT",
+  "homepage": "https://github.com/ozekimasaki/vite-plugin-glob-input#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozekimasaki/vite-plugin-glob-input.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ozekimasaki/vite-plugin-glob-input/issues"
+  },
+  "keywords": [
+    "vite",
+    "vite-plugin",
+    "static",
+    "glob"
+  ],
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "clean": "rimraf ./dist",
+    "type-check": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "tsc": "tsc -p .",
+    "build": "pnpm clean && pnpm tsc",
+    "prepublishOnly": "pnpm coverage && pnpm build"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.2"
+  },
+  "peerDependencies": {
+    "vite": "^2.0.0 || ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0-beta.0",
+    "vitest": "^3.2.1",
+    "@vitest/coverage-v8": "^3.2.1",
+    "typescript": "^5.7.2",
+    "rimraf": "^6.0.1",
+    "fs-extra": "^11.2.0",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.10.2"
+  }
+}
