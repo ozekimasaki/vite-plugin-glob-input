@@ -7,7 +7,7 @@ Vite plugin to add files to `build.rollupOptions.input` using fast-glob patterns
 
 ## Features
 
-- 📦 **Vite 7+ Compatible**: Fully supports Vite 7 beta and later versions
+- 📦 **Vite 6+ Compatible**: Fully supports Vite 6 and later versions (including Vite 7 beta)
 - 🔍 **Fast Glob Integration**: Uses fast-glob for efficient file pattern matching
 - 🏷️ **Smart Aliasing**: Automatically generates meaningful entry names
 - 📁 **Flexible Configuration**: Support for complex directory structures
@@ -146,7 +146,7 @@ globInput({
 
 ## Compatibility
 
-- **Vite**: 2.x, 3.x, 4.x, 5.x, 6.x, 7.x
+- **Vite**: ^6.0.0 || ^7.0.0
 - **Node.js**: 18.x, 20.x, 22.x
 - **TypeScript**: 5.x
 
