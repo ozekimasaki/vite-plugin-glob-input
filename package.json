@@ -1,6 +1,6 @@
 {
   "name": "vite-plugin-glob-input",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Vite plugin to add files to build.rollupOptions.input using fast-glob",
   "author": "ozekimasaki",
   "license": "MIT",
