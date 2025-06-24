@@ -7,7 +7,7 @@
   "homepage": "https://github.com/ozekimasaki/vite-plugin-glob-input#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ozekimasaki/vite-plugin-glob-input.git"
+    "url": "git+https://github.com/ozekimasaki/vite-plugin-glob-input.git"
   },
   "bugs": {
     "url": "https://github.com/ozekimasaki/vite-plugin-glob-input/issues"
