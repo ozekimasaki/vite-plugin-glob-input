@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import type { Plugin, ResolvedConfig } from 'vite'
 import type FastGlob from 'fast-glob'
 import fg from 'fast-glob'
@@ -48,13 +48,9 @@ function convertFilesToInput(
   const updatedInput = { ...input }
 
   for (const targetFile of targetFiles) {
-    const relativePath = resolve(config.root, targetFile)
-    const parsedPath = resolve(relativePath)
-    const relativeToRoot = resolve(config.root)
-    
-    // ファイルパスの正規化
-    const normalizedPath = resolve(parsedPath).replace(resolve(relativeToRoot), '')
-    const pathParts = normalizedPath.split('/').filter(Boolean)
+    // ファイルパスの正規化（Windowsのパス区切りにも対応）
+    const normalizedPath = relative(resolve(config.root), resolve(config.root, targetFile))
+    const pathParts = normalizedPath.split(/[\\/]/).filter(Boolean)
     
     if (pathParts.length === 1) {
       // ルートディレクトリのファイル
