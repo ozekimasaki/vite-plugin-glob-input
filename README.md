@@ -147,7 +147,7 @@ globInput({
 ## Compatibility
 
 - **Vite**: ^6.0.0 || ^7.0.0 || ^8.0.0
-- **Node.js**: 20.x, 22.x
+- **Node.js**: 20.19+, 22.12+
 - **TypeScript**: 5.x
 
 ## Development
@@ -186,6 +186,13 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
+
+### v0.3.1
+
+- Fix input alias generation on Windows by using `path.relative` instead of string replace
+- Warn through the Vite plugin context instead of `console`
+- Resolve glob patterns asynchronously
+- Add CI workflow
 
 ### v0.3.0
 

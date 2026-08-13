@@ -5,7 +5,10 @@ import { beforeEach, afterAll, test, expect } from 'vitest'
 import { build } from 'vite'
 import type { UserConfig } from 'vite'
 
-import inputPlugin, { type VitePluginGlobInputOptions } from '../src/index.js'
+import inputPlugin, {
+  toInputAlias,
+  type VitePluginGlobInputOptions,
+} from '../src/index.js'
 
 const srcdir = resolve(__dirname, 'src')
 const distdir = resolve(__dirname, 'dist')
@@ -23,6 +26,22 @@ const defaultConfig = (pluginConfig: VitePluginGlobInputOptions): UserConfig => 
 
 const exists = (filepath: string): boolean =>
   existsSync(resolve(distdir, filepath))
+
+test('相対パスから input エイリアスを組み立てる', () => {
+  const options = {
+    homeAlias: 'home',
+    rootPrefix: 'root',
+    dirDelimiter: '-',
+    filePrefix: '_',
+  }
+
+  expect(toInputAlias('index.html', options)).toBe('home')
+  expect(toInputAlias('about.html', options)).toBe('root_about')
+  expect(toInputAlias('blog/index.html', options)).toBe('blog')
+  expect(toInputAlias('blog/post.html', options)).toBe('blog_post')
+  expect(toInputAlias('deep/nested/index.html', options)).toBe('deep-nested')
+  expect(toInputAlias('deep\\nested\\page.html', options)).toBe('deep-nested_page')
+})
 
 beforeEach(async () => {
   await fse.emptyDir(distdir)
@@ -44,6 +63,7 @@ test('すべてのHTMLファイルをビルドできる', async () => {
   expect(exists('subdir/non-index.html')).toBe(true)
   expect(exists('ignore/ignore.html')).toBe(true)
   expect(exists('ignore/_index.html')).toBe(true)
+  expect(exists('deep/nested/index.html')).toBe(true)
 })
 
 test('パターンマッチによるファイル除外が機能する', async () => {
