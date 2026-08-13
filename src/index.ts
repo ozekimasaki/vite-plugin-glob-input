@@ -1,5 +1,5 @@
-import { resolve } from 'node:path'
-import type { Plugin, ResolvedConfig } from 'vite'
+import path from 'node:path'
+import type { Plugin } from 'vite'
 import type FastGlob from 'fast-glob'
 import fg from 'fast-glob'
 
@@ -36,58 +36,116 @@ const DEFAULT_OPTIONS: Required<VitePluginGlobInputOptions> = {
   filePrefix: '_',
 } as const
 
+const stripExtension = (fileName: string): string =>
+  fileName.replace(/\.[^/.]+$/, '')
+
+const toPosixPath = (filePath: string): string => filePath.replace(/\\/g, '/')
+
+const normalizePattern = (pattern: FastGlob.Pattern): FastGlob.Pattern =>
+  typeof pattern === 'string' ? toPosixPath(pattern) : pattern
+
+const sameResolvedPath = (left: string, right: string): boolean => {
+  const a = toPosixPath(path.resolve(left))
+  const b = toPosixPath(path.resolve(right))
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
+const isClientEnvironment = (environment: {
+  name: string
+  consumer?: string
+}): boolean => environment.consumer === 'client' || environment.name === 'client'
+
+/**
+ * ルートからの相対パスを rollup input のキーに変換する
+ */
+export function toInputAlias(
+  relativePath: string,
+  options: Pick<
+    Required<VitePluginGlobInputOptions>,
+    'homeAlias' | 'rootPrefix' | 'dirDelimiter' | 'filePrefix'
+  >,
+): string {
+  const pathParts = relativePath.split(/[\\/]/).filter(Boolean)
+  const fileName = stripExtension(pathParts.at(-1) ?? '')
+
+  if (pathParts.length <= 1) {
+    return fileName === 'index'
+      ? options.homeAlias
+      : `${options.rootPrefix}${options.filePrefix}${fileName}`
+  }
+
+  const dirPath = pathParts.slice(0, -1).join(options.dirDelimiter)
+  return fileName === 'index'
+    ? dirPath
+    : `${dirPath}${options.filePrefix}${fileName}`
+}
+
+type GlobbedInput = {
+  files: string[]
+  input: string[] | Record<string, string>
+  collisions: string[]
+}
+
 /**
  * ファイルパスをrollupの入力形式に変換する関数
  */
 function convertFilesToInput(
   options: Required<VitePluginGlobInputOptions>,
-  config: ResolvedConfig,
+  root: string,
   input: Record<string, string>,
-  targetFiles: string[]
-): Record<string, string> {
+  targetFiles: string[],
+): { input: Record<string, string>; collisions: string[] } {
   const updatedInput = { ...input }
+  const collisions: string[] = []
 
   for (const targetFile of targetFiles) {
-    const relativePath = resolve(config.root, targetFile)
-    const parsedPath = resolve(relativePath)
-    const relativeToRoot = resolve(config.root)
-    
-    // ファイルパスの正規化
-    const normalizedPath = resolve(parsedPath).replace(resolve(relativeToRoot), '')
-    const pathParts = normalizedPath.split('/').filter(Boolean)
-    
-    if (pathParts.length === 1) {
-      // ルートディレクトリのファイル
-      const fileName = pathParts[0].replace(/\.[^/.]+$/, '') // 拡張子を除去
-      if (fileName === 'index') {
-        updatedInput[options.homeAlias] = targetFile
-      } else {
-        updatedInput[`${options.rootPrefix}${options.filePrefix}${fileName}`] = targetFile
-      }
-    } else {
-      // サブディレクトリのファイル
-      const dirPath = pathParts.slice(0, -1).join(options.dirDelimiter)
-      const fileName = pathParts[pathParts.length - 1].replace(/\.[^/.]+$/, '')
-      
-      if (fileName === 'index') {
-        updatedInput[dirPath] = targetFile
-      } else {
-        updatedInput[`${dirPath}${options.filePrefix}${fileName}`] = targetFile
-      }
+    const absoluteFile = toPosixPath(path.resolve(targetFile))
+    const relativePath = path.relative(root, absoluteFile)
+    const alias = toInputAlias(relativePath, options)
+    const existing = updatedInput[alias]
+    if (existing && !sameResolvedPath(existing, absoluteFile)) {
+      collisions.push(alias)
     }
+    updatedInput[alias] = absoluteFile
   }
 
-  return updatedInput
+  return { input: updatedInput, collisions }
+}
+
+function mergeRollupInput(
+  current: unknown,
+  globbed: GlobbedInput,
+  disableAlias: boolean,
+): string[] | Record<string, string> {
+  if (!current || typeof current === 'string') {
+    return globbed.input
+  }
+
+  if (Array.isArray(current)) {
+    const extra = globbed.files.filter(
+      (file) => !current.some((item) => sameResolvedPath(item, file)),
+    )
+    return [...current, ...extra]
+  }
+
+  if (disableAlias) {
+    return globbed.input
+  }
+
+  return {
+    ...(current as Record<string, string>),
+    ...(globbed.input as Record<string, string>),
+  }
 }
 
 /**
  * Vite plugin for glob-based input configuration
- * 
+ *
  * @param userOptions - ユーザー指定のオプション
  * @returns Vite plugin
  */
 export default function vitePluginGlobInput(
-  userOptions: VitePluginGlobInputOptions
+  userOptions: VitePluginGlobInputOptions,
 ): Plugin {
   const options: Required<VitePluginGlobInputOptions> = {
     ...DEFAULT_OPTIONS,
@@ -98,59 +156,124 @@ export default function vitePluginGlobInput(
     },
   }
 
-  let resolvedConfig: ResolvedConfig
+  let resolvedRoot = ''
+  let globbed: GlobbedInput | undefined
+  let emptyWarning: string | undefined
+  let globError: unknown
+
+  const ensureGlob = async (root: string): Promise<GlobbedInput> => {
+    if (globbed) {
+      return globbed
+    }
+
+    const globOptions: FastGlob.Options = {
+      cwd: process.cwd(),
+      onlyFiles: true,
+      unique: true,
+      ...options.options,
+      absolute: true,
+    }
+
+    const rawPatterns = Array.isArray(options.patterns)
+      ? options.patterns
+      : [options.patterns]
+    const files = (await fg(rawPatterns.map(normalizePattern), globOptions)).map(
+      (file) => toPosixPath(path.resolve(file)),
+    )
+    if (files.length === 0) {
+      const patternLabel = Array.isArray(options.patterns)
+        ? options.patterns.join(', ')
+        : options.patterns
+      emptyWarning = `No files found matching pattern: ${patternLabel}`
+      globbed = { files, input: options.disableAlias ? [] : {}, collisions: [] }
+      return globbed
+    }
+
+    if (options.disableAlias) {
+      globbed = { files, input: files, collisions: [] }
+      return globbed
+    }
+
+    const converted = convertFilesToInput(options, root, {}, files)
+    globbed = {
+      files,
+      input: converted.input,
+      collisions: converted.collisions,
+    }
+    return globbed
+  }
 
   return {
     name: 'vite-plugin-glob-input',
     enforce: 'pre',
     apply: 'build',
-    
-    configResolved(config) {
-      resolvedConfig = config
+
+    applyToEnvironment(environment) {
+      return isClientEnvironment(environment)
     },
 
-    options(rollupOptions) {
-      // fast-globに必要なオプションを設定
-      const globOptions: FastGlob.Options = {
-        ...options.options,
-        absolute: true,
+    async config(config) {
+      const root = path.resolve(config.root ?? '.')
+      resolvedRoot = root
+      try {
+        const result = await ensureGlob(root)
+        if (result.files.length === 0) {
+          return
+        }
+        return {
+          build: {
+            rollupOptions: {
+              input: result.input,
+            },
+          },
+        }
+      } catch (error) {
+        globError = error
+        throw new Error(
+          `[vite-plugin-glob-input] Error processing glob patterns: ${String(error)}`,
+        )
+      }
+    },
+
+    configResolved(config) {
+      resolvedRoot = config.root
+    },
+
+    async options(rollupOptions) {
+      if (globError) {
+        this.error(
+          `[vite-plugin-glob-input] Error processing glob patterns: ${String(globError)}`,
+        )
       }
 
       try {
-        // パターンにマッチするファイルを取得
-        const targetFiles = fg.sync(options.patterns, globOptions)
-        
-        if (targetFiles.length === 0) {
-          console.warn(`[vite-plugin-glob-input] No files found matching pattern: ${options.patterns}`)
+        const result = await ensureGlob(resolvedRoot || path.resolve('.'))
+        if (result.files.length === 0) {
           return rollupOptions
         }
-
-        // 入力設定を処理
-        let { input } = rollupOptions
-        
-        if (!input || typeof input === 'string') {
-          input = options.disableAlias ? [] : {}
-        }
-
-        if (Array.isArray(input)) {
-          // 配列形式の場合はファイルを追加
-          rollupOptions.input = [...input, ...targetFiles]
-        } else {
-          // オブジェクト形式の場合はエイリアスを生成
-          rollupOptions.input = convertFilesToInput(
-            options,
-            resolvedConfig,
-            input,
-            targetFiles
-          )
-        }
-
+        rollupOptions.input = mergeRollupInput(
+          rollupOptions.input,
+          result,
+          options.disableAlias,
+        )
       } catch (error) {
-        console.error('[vite-plugin-glob-input] Error processing glob patterns:', error)
-        throw error
+        this.error(
+          `[vite-plugin-glob-input] Error processing glob patterns: ${String(error)}`,
+        )
       }
 
       return rollupOptions
+    },
+
+    buildStart() {
+      if (emptyWarning) {
+        this.warn(emptyWarning)
+      }
+      if (globbed && globbed.collisions.length > 0) {
+        this.warn(
+          `Duplicate input aliases: ${globbed.collisions.join(', ')}. Later files overwrite earlier ones.`,
+        )
+      }
     },
   }
 }

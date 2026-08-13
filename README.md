@@ -147,20 +147,25 @@ globInput({
 ## Compatibility
 
 - **Vite**: ^6.0.0 || ^7.0.0 || ^8.0.0
-- **Node.js**: 20.x, 22.x
-- **TypeScript**: 5.x
+- **Node.js**: 20.19+, 22.12+
+- **TypeScript**: 7.x
 
 ## Development
 
 ### Testing
 
-This project uses Vitest 4 for testing:
+This project uses Vitest 4. `npm test` runs the build suite against Vite 6, 7, and 8.
 
 ```bash
-# Run tests
+# Run tests against Vite 6, 7, and 8
 npm test
 
-# Run tests with coverage
+# Run tests for a single Vite major
+npm run test:vite6
+npm run test:vite7
+npm run test:vite8
+
+# Run tests with coverage (Vite 8)
 npm run coverage
 
 # Run tests in watch mode
@@ -186,6 +191,29 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
+
+### v0.4.1
+
+- Store rollup input paths as POSIX so Windows and Vite 8 agree
+- Treat glob patterns with `\\` as `/`
+- Compare input paths case-insensitively on Windows
+- CI runs on Ubuntu, macOS, and Windows
+
+### v0.4.0
+
+- Resolve glob once in the `config` hook so Vite sees HTML entries before Rollup starts
+- Apply the plugin only to the client environment (`applyToEnvironment`)
+- Warn on duplicate input aliases
+- Default glob to `onlyFiles` / `unique`
+
+### v0.3.1
+
+- TypeScript 7.0.2
+- Fix input alias generation on Windows by using `path.relative` instead of string replace
+- Warn through the Vite plugin context instead of `console`
+- Resolve glob patterns asynchronously
+- Add CI workflow
+- Run build tests against Vite 6, 7, and 8
 
 ### v0.3.0
 
