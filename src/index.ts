@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { Plugin, ResolvedConfig } from 'vite'
+import type { Plugin } from 'vite'
 import type FastGlob from 'fast-glob'
 import fg from 'fast-glob'
 
@@ -39,6 +39,11 @@ const DEFAULT_OPTIONS: Required<VitePluginGlobInputOptions> = {
 const stripExtension = (fileName: string): string =>
   fileName.replace(/\.[^/.]+$/, '')
 
+const isClientEnvironment = (environment: {
+  name: string
+  consumer?: string
+}): boolean => environment.consumer === 'client' || environment.name === 'client'
+
 /**
  * ルートからの相対パスを rollup input のキーに変換する
  */
@@ -64,25 +69,60 @@ export function toInputAlias(
     : `${dirPath}${options.filePrefix}${fileName}`
 }
 
+type GlobbedInput = {
+  files: string[]
+  input: string[] | Record<string, string>
+  collisions: string[]
+}
+
 /**
  * ファイルパスをrollupの入力形式に変換する関数
  */
 function convertFilesToInput(
   options: Required<VitePluginGlobInputOptions>,
-  config: ResolvedConfig,
+  root: string,
   input: Record<string, string>,
   targetFiles: string[],
-): Record<string, string> {
+): { input: Record<string, string>; collisions: string[] } {
   const updatedInput = { ...input }
+  const collisions: string[] = []
 
   for (const targetFile of targetFiles) {
     const absoluteFile = path.resolve(targetFile)
-    const relativePath = path.relative(config.root, absoluteFile)
+    const relativePath = path.relative(root, absoluteFile)
     const alias = toInputAlias(relativePath, options)
-    updatedInput[alias] = targetFile
+    const existing = updatedInput[alias]
+    if (existing && path.resolve(existing) !== absoluteFile) {
+      collisions.push(alias)
+    }
+    updatedInput[alias] = absoluteFile
   }
 
-  return updatedInput
+  return { input: updatedInput, collisions }
+}
+
+function mergeRollupInput(
+  current: unknown,
+  globbed: GlobbedInput,
+  disableAlias: boolean,
+): string[] | Record<string, string> {
+  if (!current || typeof current === 'string') {
+    return globbed.input
+  }
+
+  if (Array.isArray(current)) {
+    const extra = globbed.files.filter((file) => !current.includes(file))
+    return [...current, ...extra]
+  }
+
+  if (disableAlias) {
+    return globbed.input
+  }
+
+  return {
+    ...(current as Record<string, string>),
+    ...(globbed.input as Record<string, string>),
+  }
 }
 
 /**
@@ -103,50 +143,101 @@ export default function vitePluginGlobInput(
     },
   }
 
-  let resolvedConfig: ResolvedConfig
+  let resolvedRoot = ''
+  let globbed: GlobbedInput | undefined
+  let emptyWarning: string | undefined
+  let globError: unknown
+
+  const ensureGlob = async (root: string): Promise<GlobbedInput> => {
+    if (globbed) {
+      return globbed
+    }
+
+    const globOptions: FastGlob.Options = {
+      cwd: process.cwd(),
+      onlyFiles: true,
+      unique: true,
+      ...options.options,
+      absolute: true,
+    }
+
+    const files = await fg(options.patterns, globOptions)
+    if (files.length === 0) {
+      const patternLabel = Array.isArray(options.patterns)
+        ? options.patterns.join(', ')
+        : options.patterns
+      emptyWarning = `No files found matching pattern: ${patternLabel}`
+      globbed = { files, input: options.disableAlias ? [] : {}, collisions: [] }
+      return globbed
+    }
+
+    if (options.disableAlias) {
+      globbed = { files, input: files, collisions: [] }
+      return globbed
+    }
+
+    const converted = convertFilesToInput(options, root, {}, files)
+    globbed = {
+      files,
+      input: converted.input,
+      collisions: converted.collisions,
+    }
+    return globbed
+  }
 
   return {
     name: 'vite-plugin-glob-input',
     enforce: 'pre',
     apply: 'build',
 
+    applyToEnvironment(environment) {
+      return isClientEnvironment(environment)
+    },
+
+    async config(config) {
+      const root = path.resolve(config.root ?? '.')
+      resolvedRoot = root
+      try {
+        const result = await ensureGlob(root)
+        if (result.files.length === 0) {
+          return
+        }
+        return {
+          build: {
+            rollupOptions: {
+              input: result.input,
+            },
+          },
+        }
+      } catch (error) {
+        globError = error
+        throw new Error(
+          `[vite-plugin-glob-input] Error processing glob patterns: ${String(error)}`,
+        )
+      }
+    },
+
     configResolved(config) {
-      resolvedConfig = config
+      resolvedRoot = config.root
     },
 
     async options(rollupOptions) {
-      const globOptions: FastGlob.Options = {
-        ...options.options,
-        absolute: true,
+      if (globError) {
+        this.error(
+          `[vite-plugin-glob-input] Error processing glob patterns: ${String(globError)}`,
+        )
       }
 
       try {
-        const targetFiles = await fg(options.patterns, globOptions)
-
-        if (targetFiles.length === 0) {
-          const patternLabel = Array.isArray(options.patterns)
-            ? options.patterns.join(', ')
-            : options.patterns
-          this.warn(`No files found matching pattern: ${patternLabel}`)
+        const result = await ensureGlob(resolvedRoot || path.resolve('.'))
+        if (result.files.length === 0) {
           return rollupOptions
         }
-
-        let { input } = rollupOptions
-
-        if (!input || typeof input === 'string') {
-          input = options.disableAlias ? [] : {}
-        }
-
-        if (Array.isArray(input)) {
-          rollupOptions.input = [...input, ...targetFiles]
-        } else {
-          rollupOptions.input = convertFilesToInput(
-            options,
-            resolvedConfig,
-            input,
-            targetFiles,
-          )
-        }
+        rollupOptions.input = mergeRollupInput(
+          rollupOptions.input,
+          result,
+          options.disableAlias,
+        )
       } catch (error) {
         this.error(
           `[vite-plugin-glob-input] Error processing glob patterns: ${String(error)}`,
@@ -154,6 +245,17 @@ export default function vitePluginGlobInput(
       }
 
       return rollupOptions
+    },
+
+    buildStart() {
+      if (emptyWarning) {
+        this.warn(emptyWarning)
+      }
+      if (globbed && globbed.collisions.length > 0) {
+        this.warn(
+          `Duplicate input aliases: ${globbed.collisions.join(', ')}. Later files overwrite earlier ones.`,
+        )
+      }
     },
   }
 }

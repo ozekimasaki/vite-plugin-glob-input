@@ -45,6 +45,12 @@ test('相対パスから input エイリアスを組み立てる', () => {
   expect(toInputAlias('deep\\nested\\page.html', options)).toBe('deep-nested_page')
 })
 
+test('client 環境にだけ適用する', () => {
+  const plugin = inputPlugin({ patterns: '__tests__/src/**/*.html' })
+  expect(plugin.applyToEnvironment?.({ name: 'client' } as never)).toBe(true)
+  expect(plugin.applyToEnvironment?.({ name: 'ssr', consumer: 'server' } as never)).toBe(false)
+})
+
 beforeAll(async () => {
   ;({ build } = await loadVite())
 })

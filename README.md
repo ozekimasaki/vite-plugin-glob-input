@@ -192,6 +192,13 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
 
+### v0.4.0
+
+- Resolve glob once in the `config` hook so Vite sees HTML entries before Rollup starts
+- Apply the plugin only to the client environment (`applyToEnvironment`)
+- Warn on duplicate input aliases
+- Default glob to `onlyFiles` / `unique`
+
 ### v0.3.1
 
 - TypeScript 7.0.2
