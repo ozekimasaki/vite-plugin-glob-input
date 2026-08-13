@@ -1,4 +1,4 @@
-import { resolve } from 'node:path'
+import { resolve, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
 import fse from 'fs-extra'
 import { beforeAll, beforeEach, afterAll, test, expect } from 'vitest'
@@ -43,6 +43,20 @@ test('相対パスから input エイリアスを組み立てる', () => {
   expect(toInputAlias('blog/post.html', options)).toBe('blog_post')
   expect(toInputAlias('deep/nested/index.html', options)).toBe('deep-nested')
   expect(toInputAlias('deep\\nested\\page.html', options)).toBe('deep-nested_page')
+})
+
+test('win32.relative の区切りでもエイリアスを組み立てる', () => {
+  const options = {
+    homeAlias: 'home',
+    rootPrefix: 'root',
+    dirDelimiter: '-',
+    filePrefix: '_',
+  }
+  const relative = win32.relative(
+    'C:\\proj',
+    'C:\\proj\\src\\blog\\index.html',
+  )
+  expect(toInputAlias(relative, options)).toBe('src-blog')
 })
 
 test('client 環境にだけ適用する', () => {

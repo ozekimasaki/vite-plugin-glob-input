@@ -39,6 +39,17 @@ const DEFAULT_OPTIONS: Required<VitePluginGlobInputOptions> = {
 const stripExtension = (fileName: string): string =>
   fileName.replace(/\.[^/.]+$/, '')
 
+const toPosixPath = (filePath: string): string => filePath.replace(/\\/g, '/')
+
+const normalizePattern = (pattern: FastGlob.Pattern): FastGlob.Pattern =>
+  typeof pattern === 'string' ? toPosixPath(pattern) : pattern
+
+const sameResolvedPath = (left: string, right: string): boolean => {
+  const a = toPosixPath(path.resolve(left))
+  const b = toPosixPath(path.resolve(right))
+  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
+}
+
 const isClientEnvironment = (environment: {
   name: string
   consumer?: string
@@ -88,11 +99,11 @@ function convertFilesToInput(
   const collisions: string[] = []
 
   for (const targetFile of targetFiles) {
-    const absoluteFile = path.resolve(targetFile)
+    const absoluteFile = toPosixPath(path.resolve(targetFile))
     const relativePath = path.relative(root, absoluteFile)
     const alias = toInputAlias(relativePath, options)
     const existing = updatedInput[alias]
-    if (existing && path.resolve(existing) !== absoluteFile) {
+    if (existing && !sameResolvedPath(existing, absoluteFile)) {
       collisions.push(alias)
     }
     updatedInput[alias] = absoluteFile
@@ -111,7 +122,9 @@ function mergeRollupInput(
   }
 
   if (Array.isArray(current)) {
-    const extra = globbed.files.filter((file) => !current.includes(file))
+    const extra = globbed.files.filter(
+      (file) => !current.some((item) => sameResolvedPath(item, file)),
+    )
     return [...current, ...extra]
   }
 
@@ -161,7 +174,12 @@ export default function vitePluginGlobInput(
       absolute: true,
     }
 
-    const files = await fg(options.patterns, globOptions)
+    const rawPatterns = Array.isArray(options.patterns)
+      ? options.patterns
+      : [options.patterns]
+    const files = (await fg(rawPatterns.map(normalizePattern), globOptions)).map(
+      (file) => toPosixPath(path.resolve(file)),
+    )
     if (files.length === 0) {
       const patternLabel = Array.isArray(options.patterns)
         ? options.patterns.join(', ')

@@ -192,6 +192,13 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
 
+### v0.4.1
+
+- Store rollup input paths as POSIX so Windows and Vite 8 agree
+- Treat glob patterns with `\\` as `/`
+- Compare input paths case-insensitively on Windows
+- CI runs on Ubuntu, macOS, and Windows
+
 ### v0.4.0
 
 - Resolve glob once in the `config` hook so Vite sees HTML entries before Rollup starts
