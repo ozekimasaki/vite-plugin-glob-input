@@ -154,13 +154,18 @@ globInput({
 
 ### Testing
 
-This project uses Vitest 4 for testing:
+This project uses Vitest 4. `npm test` runs the build suite against Vite 6, 7, and 8.
 
 ```bash
-# Run tests
+# Run tests against Vite 6, 7, and 8
 npm test
 
-# Run tests with coverage
+# Run tests for a single Vite major
+npm run test:vite6
+npm run test:vite7
+npm run test:vite8
+
+# Run tests with coverage (Vite 8)
 npm run coverage
 
 # Run tests in watch mode
@@ -194,6 +199,7 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 - Warn through the Vite plugin context instead of `console`
 - Resolve glob patterns asynchronously
 - Add CI workflow
+- Run build tests against Vite 6, 7, and 8
 
 ### v0.3.0
 

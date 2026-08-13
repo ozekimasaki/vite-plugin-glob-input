@@ -32,7 +32,7 @@ jobs:
       - name: Type check
         run: pnpm type-check
 
-      - name: Test
+      - name: Test (Vite 6 / 7 / 8)
         run: pnpm test
 
       - name: Build

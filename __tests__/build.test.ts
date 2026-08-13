@@ -1,17 +1,19 @@
 import { resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import fse from 'fs-extra'
-import { beforeEach, afterAll, test, expect } from 'vitest'
-import { build } from 'vite'
+import { beforeAll, beforeEach, afterAll, test, expect } from 'vitest'
 import type { UserConfig } from 'vite'
 
 import inputPlugin, {
   toInputAlias,
   type VitePluginGlobInputOptions,
 } from '../src/index.js'
+import { loadVite } from './vite.js'
 
 const srcdir = resolve(__dirname, 'src')
 const distdir = resolve(__dirname, 'dist')
+
+let build: Awaited<ReturnType<typeof loadVite>>['build']
 
 const defaultConfig = (pluginConfig: VitePluginGlobInputOptions): UserConfig => {
   return {
@@ -43,6 +45,10 @@ test('相対パスから input エイリアスを組み立てる', () => {
   expect(toInputAlias('deep\\nested\\page.html', options)).toBe('deep-nested_page')
 })
 
+beforeAll(async () => {
+  ;({ build } = await loadVite())
+})
+
 beforeEach(async () => {
   await fse.emptyDir(distdir)
 })
@@ -56,7 +62,7 @@ test('すべてのHTMLファイルをビルドできる', async () => {
     patterns: '__tests__/src/**/*.html',
   })
   await build(config)
-  
+
   expect(exists('index.html')).toBe(true)
   expect(exists('non-index.html')).toBe(true)
   expect(exists('subdir/index.html')).toBe(true)
@@ -74,7 +80,7 @@ test('パターンマッチによるファイル除外が機能する', async ()
     },
   })
   await build(config)
-  
+
   expect(exists('index.html')).toBe(true)
   expect(exists('non-index.html')).toBe(true)
   expect(exists('subdir/index.html')).toBe(true)
@@ -92,7 +98,7 @@ test('エイリアス無効化が正常に動作する', async () => {
     },
   })
   await build(config)
-  
+
   expect(exists('index.html')).toBe(true)
   expect(exists('non-index.html')).toBe(true)
   expect(exists('subdir/index.html')).toBe(true)
@@ -109,7 +115,7 @@ test('カスタムエイリアス設定が適用される', async () => {
     dirDelimiter: '__',
     filePrefix: '--',
   })
-  
+
   await build(config)
   expect(exists('index.html')).toBe(true)
 })
@@ -118,7 +124,7 @@ test('マッチするファイルがない場合の処理', async () => {
   const config = defaultConfig({
     patterns: '__tests__/src/**/*.nonexistent',
   })
-  
+
   // エラーを投げずに正常に完了することを確認
   await expect(build(config)).resolves.not.toThrow()
 })
